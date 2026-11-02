@@ -12,6 +12,8 @@
 <link rel="apple-touch-icon" href="icons/apple-180.png">
 <meta name="apple-mobile-web-app-title" content="İhale Paneli">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 :root{--bg:#F4F2EE;--card:#FFFFFF;--ink:#1C1D21;--muted:#6B6A66;--line:#E2DED6;--accent:#1F2A44;--gold:#B08A3E;--green:#E6F2E4;--greenInk:#2F6B33;--red:#B3261E;--redBg:#FBE9E7;--amber:#8A5A00;--amberBg:#FFF4DC;--input:#FFFDF5}
@@ -126,6 +128,11 @@ a.lnk{color:var(--accent);text-decoration:none;font-weight:600}
 .login h1{display:flex;align-items:center;gap:10px}.login img{width:40px;height:40px;border-radius:10px}
 .login input{width:100%}.err{color:var(--red);font-weight:600;font-size:13px}
 .hbtns{display:flex;gap:6px;flex-wrap:wrap}
+.u{font-size:11.5px;padding:2px 8px;border-radius:999px;font-weight:700;display:inline-block;margin-top:4px}
+.u-ok{background:var(--green);color:var(--greenInk)}.u-kis{background:var(--amberBg);color:var(--amber)}.u-no{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}.u-bel{background:var(--line);color:var(--muted)}
+.isr{font-weight:600}.gv{font-size:11px;color:var(--muted);font-weight:500}
+.sbox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.sbox h3{margin:0 0 6px;font-size:15px}.prog{height:6px;background:var(--line);border-radius:9px;overflow:hidden;margin-top:8px}.prog i{display:block;height:100%;background:var(--accent);width:0}
 </style>
 </head>
 <body>
@@ -139,7 +146,7 @@ const FIRMA_VARS = {
   argunhan:{ad:"ARGUNHAN DENTAL İÇ VE DIŞ TİCARET SANAYİ LTD. ŞTİ.",kisa:"Argunhan Dental İç ve Dış Ticaret Sanayi Ltd. Şti.",adres:"Cumhuriyet Mh. Millet Cd. Efe Plaza No: 35/302 Melikgazi / KAYSERİ",vergi:"Erciyes V.D. 074 120 9455  •  Tic. Sic. No: 61908  •  Mersis No: 0074120945500001",tel:"",yetkili:"",logo:"arg",kase:true},
   kristal:{ad:"KRİSTAL DİŞ DEPOSU – AHMET ARGUNHAN",kisa:"Kristal Diş Deposu – Ahmet Argunhan",adres:"Cumhuriyet Mah. Tennuri Sok. No:13/C Melikgazi / KAYSERİ",vergi:"",tel:"serhatarg@hotmail.com",yetkili:"",logo:"kr",kase:false}
 };
-const S = {usul:'',il:'',sort:'son',kq:'',seen:null,ihaleler:{},teklif:{},ayar:null,view:'home',cur:null,filter:'aktif',q:'',our:false,loaded:false,stale:false,db:null,canWrite:true};
+const S = {raw:{},analiz:{},usul:'',il:'',sort:'son',kq:'',seen:null,ihaleler:{},teklif:{},ayar:null,view:'home',cur:null,filter:'aktif',q:'',our:false,loaded:false,stale:false,db:null,canWrite:true};
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt = n=>(Number(n)||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -194,6 +201,38 @@ function renderKalem(){
   const i=$('#kq');i.oninput=e=>{S.kq=e.target.value;const p=e.target.selectionStart;renderKalem();const j=$('#kq');j.focus();j.setSelectionRange(p,p);};if(!S.kq)i.focus();}
 function linkify(t){return esc(t).replace(/(\+?90\s*)?\(?0?\s*(\d{3})\)?[\s.-]*(\d{3})[\s.-]*(\d{2})[\s.-]*(\d{2})/g,(m,a,b,c,d,e)=>`<a class="lnk" href="tel:+90${b}${c}${d}${e}">${m.trim()}</a>`).replace(/([\w.-]+@[\w.-]+\.[a-z]{2,})/gi,'<a class="lnk" href="mailto:$1">$1</a>');}
 
+// ---------- şartname incelemesi ----------
+function applyAnaliz(){const o={};for(const [id,x] of Object.entries(S.raw)){const a=S.analiz[id];const ak=(a&&a.kalemler)||{};
+  o[id]={...x,sartOkundu:!!a,kalemler:(x.kalemler||[]).map(k=>{const r=ak[String(k.n)];if(!r)return k;return {...k,adOneri:k.oneri,oneri:r.oneri||k.oneri,bizim:!!r.bizim&&r.uyum!=='uygun değil',an:r};})};}
+  S.ihaleler=o;}
+const UY={'uygun':['u-ok','✓ Uygun'],'kısmen':['u-kis','⚠ Kısmen uygun'],'uygun değil':['u-no','✗ Uygun değil'],'belirsiz':['u-bel','? Belirsiz']};
+function uyPill(r){const u=UY[r.uyum]||UY['belirsiz'];return `<span class="u ${u[0]}" title="${esc(r.uyum_neden||'')}">${u[1]}</span>`;}
+async function fileB64(f){const b=new Uint8Array(await f.arrayBuffer());let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s);}
+async function collectDocs(files,msg){const pdfs=[],texts=[],skip=[];
+  async function one(name,blob){const n=name.toLowerCase();
+    if(n.endsWith('.pdf'))pdfs.push({name,data:await fileB64(blob)});
+    else if(n.endsWith('.docx')){const r=await mammoth.extractRawText({arrayBuffer:await blob.arrayBuffer()});texts.push({name,text:r.value});}
+    else if(n.endsWith('.txt')||n.endsWith('.html')||n.endsWith('.htm'))texts.push({name,text:(await blob.text()).replace(/<[^>]+>/g,' ')});
+    else if(n.endsWith('.zip')){const z=await JSZip.loadAsync(await blob.arrayBuffer());for(const e of Object.values(z.files)){if(e.dir)continue;await one(e.name.split('/').pop(),new Blob([await e.async('uint8array')]));}}
+    else skip.push(name);}
+  for(const f of files){msg('Açılıyor: '+f.name);await one(f.name,f);}
+  return {pdfs,texts,skip};}
+async function runAnaliz(id,files,fresh){const box=$('#smsg'),bar=$('#sbar');const msg=t=>{if($('#smsg'))$('#smsg').textContent=t;};
+  try{const docs=await collectDocs(files,msg);
+    if(!docs.pdfs.length&&!docs.texts.length){msg('Okunabilir dosya bulunamadı (PDF, Word .docx veya ZIP yükleyin). Atlananlar: '+docs.skip.join(', '));return;}
+    const mb=docs.pdfs.reduce((a,p)=>a+p.data.length*0.75,0)/1048576;if(mb>28){msg('PDF dosyaları çok büyük ('+mb.toFixed(0)+' MB). Sadece teknik şartname dosyasını yükleyin.');return;}
+    const x=S.raw[id],K=x.kalemler||[];const prev=(!fresh&&S.analiz[id])||{};
+    const a={durum:'okundu',dosyalar:[...docs.pdfs.map(p=>p.name),...docs.texts.map(t=>t.name)],atlanan:docs.skip,tarih:new Date().toISOString(),genel:prev.genel||null,kalemler:{...(prev.kalemler||{})}};
+    const todo=K.map((k,i)=>i).filter(i=>!a.kalemler[String(K[i].n)]);const B=15;
+    for(let j=0;j<todo.length;j+=B){const from=todo[j],to=todo[Math.min(j+B,todo.length)-1]+1;
+      msg(`İnceleniyor: kalem ${j+1}–${Math.min(j+B,todo.length)} / ${todo.length} (her parça 1-2 dakika sürebilir)`);if($('#sbar'))$('#sbar').style.width=(j/todo.length*100)+'%';
+      const {data,error}=await SB.functions.invoke('sartname-analiz',{body:{id,from,to,pdfs:docs.pdfs,texts:docs.texts,genel:!a.genel}});
+      if(error){let m=error.message;try{m=(await error.context.json()).error||m;}catch(e){}msg('Hata: '+m+' — "İncele" ile kaldığı yerden devam edebilirsiniz.');break;}
+      if(data.genel&&data.genel.ozet)a.genel=data.genel;(data.kalemler||[]).forEach(r=>a.kalemler[String(r.n)]=r);
+      S.analiz[id]=a;await SB.from('ihale_analiz').upsert({id,data:a,updated_at:new Date().toISOString()});applyAnaliz();}
+    if(Object.keys(a.kalemler).length>=K.length){msg('Şartname incelendi.');}
+    renderDetail();}catch(e){msg('Hata: '+(e&&e.message||e));}}
+
 // ---------- render: liste ----------
 function renderList(){
   const all=Object.entries(S.ihaleler).map(([id,d])=>({id,...d}));
@@ -217,7 +256,7 @@ function renderList(){
   document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{S.filter=c.dataset.f;renderList();});
 }
 function card(x){const d=dueInfo(x.son);const k=x.kalemler||[];const our=k.filter(i=>i.bizim).length;const s=st(x.id);
-  return `<div class="card" data-id="${x.id}"><div class="due ${d.hot&&!d.past?'hot':''}">${d.t}<small>${d.rel}</small></div><div><div class="inst">${esc(x.kurum)}</div><div>${esc(x.is)}</div><div class="meta">${ilOf(x)?esc(ilOf(x))+' · ':''}${esc(x.dtno)} · ${k.length} kalem${x.usul!=='Doğrudan Temin'?' · '+esc(x.usul):''}</div></div><div class="badges">${isNew(x.id)&&active(x)?'<span class="b new">Yeni</span>':''}${our?`<span class="b our">${our} kalem bizim marka</span>`:''}${x.usul!=='Doğrudan Temin'?`<span class="b open">${esc(x.usul)}</span>`:''}${s!=='yeni'?`<span class="b st-${s}">${STL[s]}</span>`:''}</div></div>`;}
+  return `<div class="card" data-id="${x.id}"><div class="due ${d.hot&&!d.past?'hot':''}">${d.t}<small>${d.rel}</small></div><div><div class="inst">${esc(x.kurum)}</div><div>${esc(x.is)}</div><div class="meta">${ilOf(x)?esc(ilOf(x))+' · ':''}${esc(x.dtno)} · ${k.length} kalem${x.usul!=='Doğrudan Temin'?' · '+esc(x.usul):''}</div></div><div class="badges">${x.sartOkundu?'<span class="b">Şartname okundu</span>':''}${isNew(x.id)&&active(x)?'<span class="b new">Yeni</span>':''}${our?`<span class="b our">${our} kalem bizim marka</span>`:''}${x.usul!=='Doğrudan Temin'?`<span class="b open">${esc(x.usul)}</span>`:''}${s!=='yeni'?`<span class="b st-${s}">${STL[s]}</span>`:''}</div></div>`;}
 
 // ---------- detay ----------
 function tk(id){if(!S.teklif[id])S.teklif[id]={durum:'yeni',firma:'argunhan',teslim:'Sipariş tarihinden itibaren 15 gün',teslimYeri:'İdare deposu',odeme:'İdare mevzuatına göre',aciklama:'',gecerlilik:'30 gün',satirlar:{}};return S.teklif[id];}
@@ -229,7 +268,7 @@ function renderDetail(){
     <td data-l="Teklif ver"><input type="checkbox" data-k="sec" ${sel?'checked':''}></td><td class="num" data-l="Sıra">${k.n}</td>
     <td data-l="Kalem"><b>${esc(k.ad)}</b>${k.not?`<div class="kr" style="color:var(--amber)">${esc(k.not)}</div>`:''}${k.kritik?`<div class="kr"><details><summary>Şartname</summary>${esc(k.kritik)}</details></div>`:''}</td>
     <td class="num" data-l="Miktar">${fmtQ(k.miktar)} ${esc(k.birim)}</td>
-    <td data-l="Şartnamede istenen">${esc(k.istenen||'—')}</td><td data-l="Önerilen" class="oneri ${k.bizim?'our':''}">${esc(k.oneri||'—')}</td>
+    <td data-l="Şartname / işaret ettiği ürün">${k.an?`<div class="isr">${esc([k.an.isaret&&k.an.isaret.marka,k.an.isaret&&k.an.isaret.urun].filter(Boolean).join(' ')||'—')} <span class="gv">${esc(k.an.isaret&&k.an.isaret.guven?'('+k.an.isaret.guven+' güven)':'')}</span></div>${k.an.isaret&&k.an.isaret.neden?`<div class="kr">${esc(k.an.isaret.neden)}</div>`:''}<div class="kr"><details><summary>Teknik tarif</summary>${esc(k.an.tarif||'—')}</details></div>`:esc(k.istenen||'—')}</td><td data-l="Önerilen" class="oneri ${k.bizim?'our':''}">${esc(k.oneri||'—')}${k.an?`<div>${uyPill(k.an)}</div>${k.an.uyum_neden?`<div class="kr">${esc(k.an.uyum_neden)}</div>`:''}${k.an.dikkat?`<div class="kr" style="color:var(--amber)">${esc(k.an.dikkat)}</div>`:''}`:''}</td>
     <td data-l="Teklif marka"><input type="text" data-k="marka" value="${esc(r.marka||'')}" placeholder="Marka / model"></td>
     <td data-l="Birim fiyat ₺ (KDV hariç)"><input type="number" step="0.01" min="0" data-k="fiyat" value="${r.fiyat??''}" placeholder="KDV hariç"></td>
     <td data-l="KDV %"><select data-k="kdv">${[10,20,1,0].map(v=>`<option ${Number(r.kdv??10)===v?'selected':''}>${v}</option>`).join('')}</select></td>
@@ -238,7 +277,11 @@ function renderDetail(){
   <div class="dhead"><div class="sub">${esc(x.usul)} · ${esc(x.kaynak)} · ${esc(x.dtno)}</div><h2>${esc(x.kurum)}</h2><div>${esc(x.is)}</div>
    <div class="kv"><b>Son teklif</b><span class="${d.hot&&!d.past?'due hot':''}" style="font-weight:600">${d.t} · ${d.rel}</span><b>Teklif yeri / iletişim</b><span>${linkify(x.iletisim)}</span><b>Şartlar</b><span>${esc(x.sartlar||'—')}</span><b>Durum</b><span>${STL[t.durum]}</span></div>
    <div class="acts">${['takip','verildi','gizli','yeni'].filter(s=>s!==t.durum).map(s=>`<button class="small" data-st="${s}">${{takip:'Takibe al',verildi:'Teklif verildi olarak işaretle',gizli:'Gizle',yeni:'Yeni olarak işaretle'}[s]}</button>`).join('')}<span class="sp"></span><button class="small" id="allOur">Bizim markalı kalemleri seç</button></div></div>
-  <div class="tblwrap"><table><thead><tr><th></th><th>#</th><th>Kalem</th><th>Miktar</th><th>Şartnamede istenen</th><th>Önerilen</th><th>Teklif marka</th><th>Birim fiyat ₺</th><th>KDV %</th><th>Tutar ₺</th></tr></thead><tbody>${rows}</tbody></table></div>
+  ${(()=>{const a=S.analiz[id];const done=a?Object.keys(a.kalemler||{}).length:0;
+   return `<div class="sbox"><h3>Şartname incelemesi</h3>${a?`<div class="sub">${done}/${K.length} kalem incelendi · ${esc((a.dosyalar||[]).join(', '))} · ${new Date(a.tarih).toLocaleString('tr-TR')}</div>${a.genel&&a.genel.ozet?`<p style="margin:8px 0 0;white-space:pre-line">${esc(a.genel.ozet)}</p>`:''}`:'<div class="sub">Şartname henüz incelenmedi. Öneriler şimdilik sadece kalem adına göre. EKAP / İhale Dünyası doküman paketini (ZIP), teknik şartname PDF\'ini veya Word dosyasını yükleyin.</div>'}
+   <div class="acts"><label class="btn small" style="cursor:pointer">Şartname yükle ve incele<input type="file" id="sfile" multiple accept=".pdf,.docx,.zip,.txt" hidden></label>${a&&done<K.length?'<span class="sub">Eksik kalemler için aynı dosyayı tekrar yükleyin; kaldığı yerden devam eder.</span>':''}${a?'<button class="small" id="sfresh">Baştan incele</button>':''}</div>
+   <div class="sub" id="smsg"></div><div class="prog"><i id="sbar"></i></div></div>`;})()}
+  <div class="tblwrap"><table><thead><tr><th></th><th>#</th><th>Kalem</th><th>Miktar</th><th>Şartname / işaret ettiği ürün</th><th>Önerilen</th><th>Teklif marka</th><th>Birim fiyat ₺</th><th>KDV %</th><th>Tutar ₺</th></tr></thead><tbody>${rows}</tbody></table></div>
   <div class="foot"><div class="box"><div class="set"><div><label>Teklifi veren firma</label><select id="firma"><option value="argunhan" ${t.firma==='argunhan'?'selected':''}>Argunhan Dental Ltd. Şti.</option><option value="kristal" ${t.firma==='kristal'?'selected':''}>Kristal Diş Deposu</option></select></div><div><label>Geçerlilik</label><input type="text" id="gecerlilik" value="${esc(t.gecerlilik)}"></div></div>
    <div class="set"><div><label>Teslim süresi</label><input type="text" id="teslim" value="${esc(t.teslim)}"></div><div><label>Teslim yeri</label><input type="text" id="teslimYeri" value="${esc(t.teslimYeri)}"></div></div>
    <label>Ödeme</label><input type="text" id="odeme" value="${esc(t.odeme)}"><label>Açıklama</label><textarea id="aciklama" rows="2">${esc(t.aciklama)}</textarea>
@@ -251,6 +294,7 @@ function renderDetail(){
   ['firma','teslim','teslimYeri','odeme','aciklama','gecerlilik'].forEach(f=>$('#'+f).addEventListener('input',e=>{t[f]=e.target.value;save(id);}));
   $('#firma').onchange=e=>{t.firma=e.target.value;save(id);};
   $('#pdfBtn').onclick=()=>preview(id);
+  const sf=$('#sfile');if(sf)sf.onchange=e=>{const f=[...e.target.files];if(f.length)runAnaliz(id,f,false);};const sr=$('#sfresh');if(sr)sr.onclick=()=>{const i=$('#sfile');i.onchange=e=>{const f=[...e.target.files];if(f.length)runAnaliz(id,f,true);};i.click();};
   totals();
 }
 function calc(id){const x=S.ihaleler[id],t=tk(id);const L=[];(x.kalemler||[]).forEach(k=>{const r=t.satirlar[k.n];if(r&&r.sec&&r.fiyat)L.push({k,r,tut:r.fiyat*(k.miktar||0)});});const net=L.reduce((a,b)=>a+b.tut,0);const kdv={};L.forEach(l=>{const p=Number(l.r.kdv??10);kdv[p]=(kdv[p]||0)+l.tut*p/100;});const kt=Object.values(kdv).reduce((a,b)=>a+b,0);return{L,net,kdv,genel:net+kt};}
@@ -302,9 +346,9 @@ function loginView(msg){$('#app').innerHTML=`<form class="login" id="lf"><h1><im
   $('#lf').onsubmit=async e=>{e.preventDefault();const {error}=await SB.auth.signInWithPassword({email:$('#le').value.trim(),password:$('#lp').value});if(error)return loginView('E-posta veya şifre hatalı.');boot();};}
 async function loadAll(manual){
   const since=new Date(Date.now()-3*864e5).toISOString();
-  const [a,b,c]=await Promise.all([SB.from('ihale_ilanlar').select('id,data').gte('son',since).limit(5000),SB.from('ihale_teklifler').select('id,data').limit(5000),SB.from('ihale_ayarlar').select('key,data')]);
+  const [a,an,b,c]=await Promise.all([SB.from('ihale_ilanlar').select('id,data').gte('son',since).limit(5000),SB.from('ihale_analiz').select('id,data').limit(5000),SB.from('ihale_teklifler').select('id,data').limit(5000),SB.from('ihale_ayarlar').select('key,data')]);
   if(a.error){S.stale=true;rerender(true);return;}
-  const o={};a.data.forEach(r=>o[r.id]=r.data);S.ihaleler=o;
+  const o={};a.data.forEach(r=>o[r.id]=r.data);S.raw=o;S.analiz={};(an.data||[]).forEach(r=>S.analiz[r.id]=r.data);applyAnaliz();
   (b.data||[]).forEach(r=>{if(!pend[r.id]&&!busy[r.id])S.teklif[r.id]=r.data;});
   const f=(c.data||[]).find(r=>r.key==='firmalar');if(f)S.ayar=f.data;
   if(!S.seen){S.seen=Object.keys(o);markSeen();}
@@ -316,6 +360,7 @@ async function boot(){
   if(!me||!me.is_admin){await SB.auth.signOut();return loginView('Bu hesabın yönetici yetkisi yok.');}
   S.db=DB;loadSeen();rerender(true);await loadAll();
   SB.channel('ihale').on('postgres_changes',{event:'*',schema:'public',table:'ihale_teklifler'},p=>{const r=p.new;if(r&&r.id&&!pend[r.id]&&!busy[r.id]){S.teklif[r.id]=r.data;rerender();}})
+    .on('postgres_changes',{event:'*',schema:'public',table:'ihale_analiz'},p=>{const r=p.new;if(r&&r.id){S.analiz[r.id]=r.data;applyAnaliz();rerender();}})
     .on('postgres_changes',{event:'*',schema:'public',table:'ihale_ilanlar'},()=>{clearTimeout(boot.t);boot.t=setTimeout(loadAll,1500);}).subscribe();
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')loadAll();});
   setInterval(loadAll,5*60*1000);}
