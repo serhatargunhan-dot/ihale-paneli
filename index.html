@@ -223,7 +223,7 @@ async function runAnaliz(id,files,fresh){const box=$('#smsg'),bar=$('#sbar');con
     const mb=docs.pdfs.reduce((a,p)=>a+p.data.length*0.75,0)/1048576;if(mb>28){msg('PDF dosyaları çok büyük ('+mb.toFixed(0)+' MB). Sadece teknik şartname dosyasını yükleyin.');return;}
     const x=S.raw[id],K=x.kalemler||[];const prev=(!fresh&&S.analiz[id])||{};
     const a={durum:'okundu',dosyalar:[...docs.pdfs.map(p=>p.name),...docs.texts.map(t=>t.name)],atlanan:docs.skip,tarih:new Date().toISOString(),genel:prev.genel||null,kalemler:{...(prev.kalemler||{})}};
-    const todo=K.map((k,i)=>i).filter(i=>!a.kalemler[String(K[i].n)]);const B=15;
+    const todo=K.map((k,i)=>i).filter(i=>!a.kalemler[String(K[i].n)]);const B=8;
     for(let j=0;j<todo.length;j+=B){const from=todo[j],to=todo[Math.min(j+B,todo.length)-1]+1;
       msg(`İnceleniyor: kalem ${j+1}–${Math.min(j+B,todo.length)} / ${todo.length} (her parça 1-2 dakika sürebilir)`);if($('#sbar'))$('#sbar').style.width=(j/todo.length*100)+'%';
       const {data,error}=await SB.functions.invoke('sartname-analiz',{body:{id,from,to,pdfs:docs.pdfs,texts:docs.texts,genel:!a.genel}});
