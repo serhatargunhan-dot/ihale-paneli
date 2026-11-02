@@ -181,29 +181,28 @@ function shell(inner,tab){const nc=newCount();
 function renderHome(){
   const A=allL().filter(active),now=Date.now();
   const in24=A.filter(x=>new Date(x.son)-now<864e5),in3=A.filter(x=>new Date(x.son)-now<3*864e5);
-  const ourCnt=x=>(x.kalemler||[]).filter(k=>k.bizim).length;
   const urgent=in3.filter(x=>st(x.id)!=='verildi').sort((a,b)=>a.son.localeCompare(b.son)).slice(0,8);
-  const top=A.filter(x=>ourCnt(x)>0&&st(x.id)!=='verildi').sort((a,b)=>ourCnt(b)-ourCnt(a)).slice(0,6);
+  const top=A.filter(x=>!x.sartOkundu&&st(x.id)!=='verildi').sort((a,b)=>a.son.localeCompare(b.son)).slice(0,6);
   const nw=A.filter(x=>isNew(x.id)).sort((a,b)=>a.son.localeCompare(b.son));
   const tile=(n,l,f,hot)=>`<div class="tile ${hot&&n?'hot':''}" data-go="${f}"><b>${n}</b><span>${l}</span></div>`;
   shell(`<div class="tiles">${tile(in24.length,'24 saat içinde son teklif','aktif',1)}${tile(nw.length,'Yeni eklenen ilan','yeni',1)}${tile(A.filter(x=>st(x.id)==='takip').length,'Takipte','takip')}${tile(A.filter(x=>st(x.id)==='verildi').length,'Teklif verildi','verildi')}</div>
   ${nw.length?`<div class="sec">Yeni eklenenler <a data-go="yeni">Tümü →</a></div><div class="list">${nw.slice(0,5).map(card).join('')}</div>`:''}
   <div class="sec">Son teklifi yaklaşanlar (3 gün) <a data-go="aktif">Tüm ihaleler →</a></div><div class="list">${urgent.length?urgent.map(card).join(''):'<div class="empty">3 gün içinde son teklifi olan ihale yok.</div>'}</div>
-  <div class="sec">Bizim markalarla en çok kaleme girilebilecekler</div><div class="list">${top.map(card).join('')||'<div class="empty">—</div>'}</div>`,'home');
+  <div class="sec">Şartnamesi henüz incelenmeyenler</div><div class="list">${top.map(card).join('')||'<div class="empty">Aktif ilanların hepsinin şartnamesi incelendi.</div>'}</div>`,'home');
   document.querySelectorAll('[data-go]').forEach(t=>t.onclick=()=>{const f=t.dataset.go;S.view='list';S.filter=f==='yeni'?'yeni':f;S.q='';rerender(true);window.scrollTo(0,0);});}
 function renderKalem(){
   const q=S.kq.trim().toLocaleLowerCase('tr');let R=[];
-  if(q.length>=2){allL().filter(active).forEach(x=>(x.kalemler||[]).forEach(k=>{if((k.ad+' '+(k.oneri||'')).toLocaleLowerCase('tr').includes(q))R.push({x,k});}));R.sort((a,b)=>a.x.son.localeCompare(b.x.son));}
+  if(q.length>=2){allL().filter(active).forEach(x=>(x.kalemler||[]).forEach(k=>{if((k.ad+' '+(k.an?(k.an.tarif||'')+' '+((k.an.isaret||{}).marka||'')+' '+((k.an.isaret||{}).urun||''):'')).toLocaleLowerCase('tr').includes(q))R.push({x,k});}));R.sort((a,b)=>a.x.son.localeCompare(b.x.son));}
   const tot={};R.forEach(r=>{const b=(r.k.birim||'').toLocaleLowerCase('tr');if(typeof r.k.miktar==='number')tot[b]=(tot[b]||0)+r.k.miktar;});
   shell(`<div class="tools"><input type="search" id="kq" placeholder="Kalem ara: davye, portegü, frez, gutta…" value="${esc(S.kq)}"></div>
   <div class="sub" style="margin:8px 0">${q.length<2?'Aktif ihalelerin tüm kalemlerinde arar. En az 2 harf yazın.':`${R.length} kalem · ${new Set(R.map(r=>r.x.id)).size} ihale${Object.keys(tot).length?' · toplam '+Object.entries(tot).map(([b,n])=>fmtQ(n)+' '+esc(b)).join(', '):''}`}</div>
-  <div class="list">${R.slice(0,300).map(({x,k})=>{const d=dueInfo(x.son);return `<div class="krow" data-open="${x.id}"><div><b>${esc(k.ad)}</b>${k.bizim?' <span class="b our">'+esc((k.oneri||'').replace(/\s*\(bizim marka\)/,''))+'</span>':''}<div class="meta">${esc(x.kurum)} · <span class="${d.hot?'due hot':''}" style="font-size:12.5px">${d.t} · ${d.rel}</span></div></div><div class="q">${fmtQ(k.miktar)} ${esc(k.birim)}</div></div>`;}).join('')}</div>`,'kalem');
+  <div class="list">${R.slice(0,300).map(({x,k})=>{const d=dueInfo(x.son);return `<div class="krow" data-open="${x.id}"><div><b>${esc(k.ad)}</b>${k.an&&k.an.isaret&&k.an.isaret.marka?' <span class="b">'+esc(k.an.isaret.marka+' '+(k.an.isaret.urun||''))+'</span>':''}<div class="meta">${esc(x.kurum)} · <span class="${d.hot?'due hot':''}" style="font-size:12.5px">${d.t} · ${d.rel}</span></div></div><div class="q">${fmtQ(k.miktar)} ${esc(k.birim)}</div></div>`;}).join('')}</div>`,'kalem');
   const i=$('#kq');i.oninput=e=>{S.kq=e.target.value;const p=e.target.selectionStart;renderKalem();const j=$('#kq');j.focus();j.setSelectionRange(p,p);};if(!S.kq)i.focus();}
 function linkify(t){return esc(t).replace(/(\+?90\s*)?\(?0?\s*(\d{3})\)?[\s.-]*(\d{3})[\s.-]*(\d{2})[\s.-]*(\d{2})/g,(m,a,b,c,d,e)=>`<a class="lnk" href="tel:+90${b}${c}${d}${e}">${m.trim()}</a>`).replace(/([\w.-]+@[\w.-]+\.[a-z]{2,})/gi,'<a class="lnk" href="mailto:$1">$1</a>');}
 
 // ---------- şartname incelemesi ----------
 function applyAnaliz(){const o={};for(const [id,x] of Object.entries(S.raw)){const a=S.analiz[id];const ak=(a&&a.kalemler)||{};
-  o[id]={...x,sartOkundu:!!a,kalemler:(x.kalemler||[]).map(k=>{const r=ak[String(k.n)];if(!r)return k;return {...k,adOneri:k.oneri,oneri:r.oneri||k.oneri,bizim:!!r.bizim&&r.uyum!=='uygun değil',an:r};})};}
+  o[id]={...x,sartOkundu:!!a,sartN:a?Object.keys(ak).length:0,kalemler:(x.kalemler||[]).map(k=>{const r=ak[String(k.n)];if(!r)return k;return {...k,an:r};})};}
   S.ihaleler=o;}
 const UY={'uygun':['u-ok','✓ Uygun'],'kısmen':['u-kis','⚠ Kısmen uygun'],'uygun değil':['u-no','✗ Uygun değil'],'belirsiz':['u-bel','? Belirsiz']};
 function uyPill(r){const u=UY[r.uyum]||UY['belirsiz'];return `<span class="u ${u[0]}" title="${esc(r.uyum_neden||'')}">${u[1]}</span>`;}
@@ -237,26 +236,25 @@ async function runAnaliz(id,files,fresh){const box=$('#smsg'),bar=$('#sbar');con
 function renderList(){
   const all=Object.entries(S.ihaleler).map(([id,d])=>({id,...d}));
   let L=all.filter(x=>{const s=st(x.id);const past=new Date(x.son)<Date.now();if(S.filter==='aktif')return s!=='gizli'&&!past;if(S.filter==='yeni')return s!=='gizli'&&!past&&isNew(x.id);if(S.filter==='tumu')return true;return s===S.filter;});
-  if(S.our)L=L.filter(x=>(x.kalemler||[]).some(k=>k.bizim));
+  if(S.our)L=L.filter(x=>x.sartOkundu);
   if(S.usul)L=L.filter(x=>S.usul==='dt'?x.usul==='Doğrudan Temin':x.usul!=='Doğrudan Temin');
   if(S.il)L=L.filter(x=>ilOf(x)===S.il);
-  if(S.q){const q=S.q.toLocaleLowerCase('tr');L=L.filter(x=>(x.kurum+' '+x.is+' '+(x.kalemler||[]).map(k=>k.ad+' '+k.istenen+' '+k.oneri).join(' ')).toLocaleLowerCase('tr').includes(q));}
-  const oc=x=>(x.kalemler||[]).filter(k=>k.bizim).length;
-  L.sort(S.sort==='bizim'?(a,b)=>oc(b)-oc(a)||a.son.localeCompare(b.son):(a,b)=>a.son.localeCompare(b.son));
+  if(S.q){const q=S.q.toLocaleLowerCase('tr');L=L.filter(x=>(x.kurum+' '+x.is+' '+(x.kalemler||[]).map(k=>k.ad+' '+(k.an?(k.an.tarif||'')+' '+((k.an.isaret||{}).marka||''):'')).join(' ')).toLocaleLowerCase('tr').includes(q));}
+  L.sort((a,b)=>a.son.localeCompare(b.son));
   const iller=[...new Set(all.filter(x=>new Date(x.son)>=Date.now()).map(ilOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));
   const cnt=k=>all.filter(x=>k==='aktif'?active(x):k==='yeni'?active(x)&&isNew(x.id):st(x.id)===k).length;
   const chips=[['aktif','Aktif'],['yeni','Yeni'],['takip','Takipte'],['verildi','Teklif verildi'],['gizli','Gizli'],['tumu','Tümü']].map(([k,l])=>`<span class="chip ${S.filter===k?'on':''}" data-f="${k}">${l}${k!=='tumu'?' · '+cnt(k):''}</span>`).join('');
-  shell(`<div class="tools"><input type="search" id="q" placeholder="Kurum, kalem veya marka ara…" value="${esc(S.q)}"><label class="sub"><input type="checkbox" id="our" ${S.our?'checked':''}> Sadece bizim markalı kalemi olanlar</label></div>
-  <div class="filters2"><select id="fu"><option value="">Tüm usuller</option><option value="dt" ${S.usul==='dt'?'selected':''}>Doğrudan temin</option><option value="ai" ${S.usul==='ai'?'selected':''}>Açık ihale / diğer</option></select><select id="fi"><option value="">Tüm iller</option>${iller.map(i=>`<option ${S.il===i?'selected':''}>${esc(i)}</option>`).join('')}</select><select id="fs"><option value="son">Son teklif tarihine göre</option><option value="bizim" ${S.sort==='bizim'?'selected':''}>Bizim kalem sayısına göre</option></select></div>
+  shell(`<div class="tools"><input type="search" id="q" placeholder="Kurum, kalem veya marka ara…" value="${esc(S.q)}"><label class="sub"><input type="checkbox" id="our" ${S.our?'checked':''}> Sadece şartnamesi incelenenler</label></div>
+  <div class="filters2"><select id="fu"><option value="">Tüm usuller</option><option value="dt" ${S.usul==='dt'?'selected':''}>Doğrudan temin</option><option value="ai" ${S.usul==='ai'?'selected':''}>Açık ihale / diğer</option></select><select id="fi"><option value="">Tüm iller</option>${iller.map(i=>`<option ${S.il===i?'selected':''}>${esc(i)}</option>`).join('')}</select></div>
   <div class="chips">${chips}</div>
   <div class="list">${L.length?L.map(card).join(''):`<div class="empty">${S.loaded?'Bu filtrede ihale yok.':'Yükleniyor…'}</div>`}</div>`,'list');
-  $('#fu').onchange=e=>{S.usul=e.target.value;renderList();};$('#fi').onchange=e=>{S.il=e.target.value;renderList();};$('#fs').onchange=e=>{S.sort=e.target.value;renderList();};
+  $('#fu').onchange=e=>{S.usul=e.target.value;renderList();};$('#fi').onchange=e=>{S.il=e.target.value;renderList();};
   $('#q').oninput=e=>{S.q=e.target.value;const p=e.target.selectionStart;renderList();const q=$('#q');q.focus();q.setSelectionRange(p,p);};
   $('#our').onchange=e=>{S.our=e.target.checked;renderList();};
   document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{S.filter=c.dataset.f;renderList();});
 }
-function card(x){const d=dueInfo(x.son);const k=x.kalemler||[];const our=k.filter(i=>i.bizim).length;const s=st(x.id);
-  return `<div class="card" data-id="${x.id}"><div class="due ${d.hot&&!d.past?'hot':''}">${d.t}<small>${d.rel}</small></div><div><div class="inst">${esc(x.kurum)}</div><div>${esc(x.is)}</div><div class="meta">${ilOf(x)?esc(ilOf(x))+' · ':''}${esc(x.dtno)} · ${k.length} kalem${x.usul!=='Doğrudan Temin'?' · '+esc(x.usul):''}</div></div><div class="badges">${x.sartOkundu?'<span class="b">Şartname okundu</span>':''}${isNew(x.id)&&active(x)?'<span class="b new">Yeni</span>':''}${our?`<span class="b our">${our} kalem bizim marka</span>`:''}${x.usul!=='Doğrudan Temin'?`<span class="b open">${esc(x.usul)}</span>`:''}${s!=='yeni'?`<span class="b st-${s}">${STL[s]}</span>`:''}</div></div>`;}
+function card(x){const d=dueInfo(x.son);const k=x.kalemler||[];const s=st(x.id);
+  return `<div class="card" data-id="${x.id}"><div class="due ${d.hot&&!d.past?'hot':''}">${d.t}<small>${d.rel}</small></div><div><div class="inst">${esc(x.kurum)}</div><div>${esc(x.is)}</div><div class="meta">${ilOf(x)?esc(ilOf(x))+' · ':''}${esc(x.dtno)} · ${k.length} kalem${x.usul!=='Doğrudan Temin'?' · '+esc(x.usul):''}</div></div><div class="badges">${x.sartOkundu?`<span class="b our">Şartname incelendi ${x.sartN}/${k.length}</span>`:''}${isNew(x.id)&&active(x)?'<span class="b new">Yeni</span>':''}${x.usul!=='Doğrudan Temin'?`<span class="b open">${esc(x.usul)}</span>`:''}${s!=='yeni'?`<span class="b st-${s}">${STL[s]}</span>`:''}</div></div>`;}
 
 // ---------- detay ----------
 function tk(id){if(!S.teklif[id])S.teklif[id]={durum:'yeni',firma:'argunhan',teslim:'Sipariş tarihinden itibaren 15 gün',teslimYeri:'İdare deposu',odeme:'İdare mevzuatına göre',aciklama:'',gecerlilik:'30 gün',satirlar:{}};return S.teklif[id];}
@@ -268,7 +266,9 @@ function renderDetail(){
     <td data-l="Teklif ver"><input type="checkbox" data-k="sec" ${sel?'checked':''}></td><td class="num" data-l="Sıra">${k.n}</td>
     <td data-l="Kalem"><b>${esc(k.ad)}</b>${k.not?`<div class="kr" style="color:var(--amber)">${esc(k.not)}</div>`:''}${k.kritik?`<div class="kr"><details><summary>Şartname</summary>${esc(k.kritik)}</details></div>`:''}</td>
     <td class="num" data-l="Miktar">${fmtQ(k.miktar)} ${esc(k.birim)}</td>
-    <td data-l="Şartname / işaret ettiği ürün">${k.an?`<div class="isr">${esc([k.an.isaret&&k.an.isaret.marka,k.an.isaret&&k.an.isaret.urun].filter(Boolean).join(' ')||'—')} <span class="gv">${esc(k.an.isaret&&k.an.isaret.guven?'('+k.an.isaret.guven+' güven)':'')}</span></div>${k.an.isaret&&k.an.isaret.neden?`<div class="kr">${esc(k.an.isaret.neden)}</div>`:''}<div class="kr"><details><summary>Teknik tarif</summary>${esc(k.an.tarif||'—')}</details></div>`:esc(k.istenen||'—')}</td><td data-l="Önerilen" class="oneri ${k.bizim?'our':''}">${esc(k.oneri||'—')}${k.an?`<div>${uyPill(k.an)}</div>${k.an.uyum_neden?`<div class="kr">${esc(k.an.uyum_neden)}</div>`:''}${k.an.dikkat?`<div class="kr" style="color:var(--amber)">${esc(k.an.dikkat)}</div>`:''}`:''}</td>
+    <td data-l="Şartnamedeki teknik tarif">${k.an?`<div style="white-space:pre-line">${esc(k.an.tarif||'—')}</div>${k.an.dikkat?`<div class="kr" style="color:var(--amber);font-weight:600">⚠ ${esc(k.an.dikkat)}</div>`:''}`:`<span class="sub">${S.analiz[id]?'İncelenmedi':'Şartname incelenmedi'}</span>`}</td>
+    <td data-l="Şartnamenin işaret ettiği ürün">${k.an&&k.an.isaret?`<div class="isr">${esc([k.an.isaret.marka,k.an.isaret.urun].filter(Boolean).join(' – ')||'—')}</div><span class="u ${({'yüksek':'u-ok','orta':'u-kis'})[k.an.isaret.guven]||'u-bel'}">${esc(k.an.isaret.guven||'?')} güven</span>${k.an.isaret.neden?`<div class="kr">${esc(k.an.isaret.neden)}</div>`:''}${/^https?:/.test(k.an.isaret.kaynak||'')?`<div class="kr"><a class="lnk" href="${esc(k.an.isaret.kaynak)}" target="_blank" rel="noopener">Kaynak ↗</a></div>`:''}`:'—'}</td>
+    <td data-l="Şartnameyi karşılayan diğer ürünler">${k.an&&(k.an.alternatifler||[]).length?k.an.alternatifler.map(a=>`<div>${esc([a.marka,a.urun].filter(Boolean).join(' – '))}</div>`).join(''):'—'}</td>
     <td data-l="Teklif marka"><input type="text" data-k="marka" value="${esc(r.marka||'')}" placeholder="Marka / model"></td>
     <td data-l="Birim fiyat ₺ (KDV hariç)"><input type="number" step="0.01" min="0" data-k="fiyat" value="${r.fiyat??''}" placeholder="KDV hariç"></td>
     <td data-l="KDV %"><select data-k="kdv">${[10,20,1,0].map(v=>`<option ${Number(r.kdv??10)===v?'selected':''}>${v}</option>`).join('')}</select></td>
@@ -276,12 +276,12 @@ function renderDetail(){
   $('#app').innerHTML=`<button class="back small" id="back">← Geri</button>
   <div class="dhead"><div class="sub">${esc(x.usul)} · ${esc(x.kaynak)} · ${esc(x.dtno)}</div><h2>${esc(x.kurum)}</h2><div>${esc(x.is)}</div>
    <div class="kv"><b>Son teklif</b><span class="${d.hot&&!d.past?'due hot':''}" style="font-weight:600">${d.t} · ${d.rel}</span><b>Teklif yeri / iletişim</b><span>${linkify(x.iletisim)}</span><b>Şartlar</b><span>${esc(x.sartlar||'—')}</span><b>Durum</b><span>${STL[t.durum]}</span></div>
-   <div class="acts">${['takip','verildi','gizli','yeni'].filter(s=>s!==t.durum).map(s=>`<button class="small" data-st="${s}">${{takip:'Takibe al',verildi:'Teklif verildi olarak işaretle',gizli:'Gizle',yeni:'Yeni olarak işaretle'}[s]}</button>`).join('')}<span class="sp"></span><button class="small" id="allOur">Bizim markalı kalemleri seç</button></div></div>
+   <div class="acts">${['takip','verildi','gizli','yeni'].filter(s=>s!==t.durum).map(s=>`<button class="small" data-st="${s}">${{takip:'Takibe al',verildi:'Teklif verildi olarak işaretle',gizli:'Gizle',yeni:'Yeni olarak işaretle'}[s]}</button>`).join('')}<span class="sp"></span><button class="small" id="fillMk" title="Teklif markası boş olan kalemlere şartnamenin işaret ettiği ürünü yazar">Teklif markasını işaret edilen ürünle doldur</button></div></div>
   ${(()=>{const a=S.analiz[id];const done=a?Object.keys(a.kalemler||{}).length:0;
-   return `<div class="sbox"><h3>Şartname incelemesi</h3>${a?`<div class="sub">${done}/${K.length} kalem incelendi · ${esc((a.dosyalar||[]).join(', '))} · ${new Date(a.tarih).toLocaleString('tr-TR')}</div>${a.genel&&a.genel.ozet?`<p style="margin:8px 0 0;white-space:pre-line">${esc(a.genel.ozet)}</p>`:''}`:'<div class="sub">Şartname henüz incelenmedi. Öneriler şimdilik sadece kalem adına göre. EKAP / İhale Dünyası doküman paketini (ZIP), teknik şartname PDF\'ini veya Word dosyasını yükleyin.</div>'}
+   return `<div class="sbox"><h3>Şartname incelemesi</h3>${a?`<div class="sub">${done}/${K.length} kalem incelendi · ${esc((a.dosyalar||[]).join(', '))} · ${new Date(a.tarih).toLocaleString('tr-TR')}</div>${a.genel&&a.genel.ozet?`<p style="margin:8px 0 0;white-space:pre-line">${esc(a.genel.ozet)}</p>`:''}`:'<div class="sub">Şartname henüz incelenmedi. EKAP / İhale Dünyası doküman paketini (ZIP), teknik şartname PDF\'ini veya Word dosyasını yükleyin.</div>'}
    <div class="acts"><label class="btn small" style="cursor:pointer">Şartname yükle ve incele<input type="file" id="sfile" multiple accept=".pdf,.docx,.zip,.txt" hidden></label>${a&&done<K.length?'<span class="sub">Eksik kalemler için aynı dosyayı tekrar yükleyin; kaldığı yerden devam eder.</span>':''}${a?'<button class="small" id="sfresh">Baştan incele</button>':''}</div>
    <div class="sub" id="smsg"></div><div class="prog"><i id="sbar"></i></div></div>`;})()}
-  <div class="tblwrap"><table><thead><tr><th></th><th>#</th><th>Kalem</th><th>Miktar</th><th>Şartname / işaret ettiği ürün</th><th>Önerilen</th><th>Teklif marka</th><th>Birim fiyat ₺</th><th>KDV %</th><th>Tutar ₺</th></tr></thead><tbody>${rows}</tbody></table></div>
+  <div class="tblwrap"><table><thead><tr><th></th><th>#</th><th>Kalem</th><th>Miktar</th><th>Şartnamedeki teknik tarif</th><th>Şartnamenin işaret ettiği ürün</th><th>Şartnameyi karşılayan diğer ürünler</th><th>Teklif marka</th><th>Birim fiyat ₺</th><th>KDV %</th><th>Tutar ₺</th></tr></thead><tbody>${rows}</tbody></table></div>
   <div class="foot"><div class="box"><div class="set"><div><label>Teklifi veren firma</label><select id="firma"><option value="argunhan" ${t.firma==='argunhan'?'selected':''}>Argunhan Dental Ltd. Şti.</option><option value="kristal" ${t.firma==='kristal'?'selected':''}>Kristal Diş Deposu</option></select></div><div><label>Geçerlilik</label><input type="text" id="gecerlilik" value="${esc(t.gecerlilik)}"></div></div>
    <div class="set"><div><label>Teslim süresi</label><input type="text" id="teslim" value="${esc(t.teslim)}"></div><div><label>Teslim yeri</label><input type="text" id="teslimYeri" value="${esc(t.teslimYeri)}"></div></div>
    <label>Ödeme</label><input type="text" id="odeme" value="${esc(t.odeme)}"><label>Açıklama</label><textarea id="aciklama" rows="2">${esc(t.aciklama)}</textarea>
@@ -289,7 +289,7 @@ function renderDetail(){
    <div class="box"><div class="tot" id="tot"></div><div class="acts"><button class="pri" id="pdfBtn">Teklif formu / PDF</button></div></div></div>`;
   $('#back').onclick=()=>{S.view=S.prev||'list';rerender(true);};
   document.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{t.durum=b.dataset.st;save(id);renderDetail();});
-  $('#allOur').onclick=()=>{K.forEach(k=>{if(k.bizim){const r=t.satirlar[k.n]||(t.satirlar[k.n]={});r.sec=true;if(!r.marka)r.marka=(k.oneri||'').replace(/\s*\(.*?\)\s*/g,' ').split(/ \/ | – /)[0].trim();}});save(id);renderDetail();};
+  $('#fillMk').onclick=()=>{K.forEach(k=>{const i=k.an&&k.an.isaret;if(i&&i.marka&&i.guven!=='düşük'){const r=t.satirlar[k.n]||(t.satirlar[k.n]={});if(!r.marka)r.marka=[i.marka,i.urun].filter(Boolean).join(' ');}});save(id);renderDetail();};
   document.querySelectorAll('tbody tr').forEach(tr=>{const n=tr.dataset.n;tr.querySelectorAll('[data-k]').forEach(inp=>{inp.addEventListener(inp.type==='checkbox'||inp.tagName==='SELECT'?'change':'input',()=>{const r=t.satirlar[n]||(t.satirlar[n]={});const k=inp.dataset.k;r[k]=inp.type==='checkbox'?inp.checked:inp.type==='number'?(inp.value===''?null:Number(inp.value)):k==='kdv'?Number(inp.value):inp.value;if(k==='fiyat'&&r.fiyat)r.sec=true;tr.classList.toggle('sel',!!r.sec);tr.querySelector('[data-k=sec]').checked=!!r.sec;const it=K.find(q=>String(q.n)===String(n));tr.querySelector('[data-tut]').textContent=r.fiyat&&it.miktar?fmt(r.fiyat*it.miktar):'';totals();save(id);});});});
   ['firma','teslim','teslimYeri','odeme','aciklama','gecerlilik'].forEach(f=>$('#'+f).addEventListener('input',e=>{t[f]=e.target.value;save(id);}));
   $('#firma').onchange=e=>{t.firma=e.target.value;save(id);};
