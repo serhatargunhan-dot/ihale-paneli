@@ -168,13 +168,16 @@ function loadSeen(){try{S.seen=JSON.parse(localStorage.getItem('ip_seen')||'null
 function isNew(id){return S.seen&&!S.seen.includes(id);}
 function markSeen(){try{localStorage.setItem('ip_seen',JSON.stringify(Object.keys(S.ihaleler)));}catch(e){}}
 const isBap=x=>/bilimap/i.test(x.kaynak||'');
-function newCount(bap){return allL().filter(x=>active(x)&&isNew(x.id)&&isBap(x)===!!bap).length;}
-function shell(inner,tab){const nc=newCount();
-  const T=[['home','⌂','Bugün'],['list','☰','İhaleler'],['bap','🎓','BAP (Bilimap)'],['kalem','⌕','Kalem ara']];
+const isDT=x=>/do[ğg]rudan/i.test(x.usul||'');
+const grp=x=>isBap(x)?'bap':isDT(x)?'dt':'ihale';
+const GRPS=['dt','ihale','bap'];
+function newCount(g){return allL().filter(x=>active(x)&&isNew(x.id)&&grp(x)===g).length;}
+function shell(inner,tab){
+  const T=[['home','⌂','Bugün'],['dt','☰','Doğrudan Temin'],['ihale','⚖','İhaleler'],['bap','🎓','BAP (Bilimap)'],['kalem','⌕','Kalem ara']];
   const srcs=[...new Set(allL().filter(active).map(x=>x.kaynak).join(' + ').split(' + ').filter(Boolean))].join(' · ')||'İhale Dünyası · Bilimap';
   $('#app').innerHTML=`<header><div><h1>İhale Paneli</h1><div class="sub">${esc(srcs)}</div></div><span class="sp"></span><div class="hbtns"><button class="small" id="instBtn" hidden>Uygulamayı yükle</button><button class="small" id="refBtn" title="Yenile">⟳</button><button class="small" id="ayarBtn">Firma bilgileri</button><button class="small" id="outBtn">Çıkış</button></div></header>
   ${S.stale?'<div class="note">Veriye şu an ulaşılamıyor; gösterilenler güncel olmayabilir.</div>':''}
-  <nav class="tabs">${T.map(([k,i,l])=>`<button class="tab ${tab===k?'on':''}" data-tab="${k}"><i>${i}</i>${l}${k==='list'&&nc?`<span class="n">${nc}</span>`:''}${k==='bap'&&newCount(true)?`<span class="n">${newCount(true)}</span>`:''}</button>`).join('')}</nav>${inner}`;
+  <nav class="tabs">${T.map(([k,i,l])=>`<button class="tab ${tab===k?'on':''}" data-tab="${k}"><i>${i}</i>${l}${GRPS.includes(k)&&newCount(k)?`<span class="n">${newCount(k)}</span>`:''}</button>`).join('')}</nav>${inner}`;
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{S.view=b.dataset.tab;rerender(true);window.scrollTo(0,0);});
   $('#ayarBtn').onclick=renderAyar;$('#refBtn').onclick=()=>loadAll(true);$('#outBtn').onclick=async()=>{await SB.auth.signOut();location.reload();};
   const ib=$('#instBtn');if(ib&&window.__inst){ib.hidden=false;ib.onclick=async()=>{window.__inst.prompt();await window.__inst.userChoice;window.__inst=null;ib.hidden=true;};}
@@ -190,7 +193,7 @@ function renderHome(){
   ${nw.length?`<div class="sec">Yeni eklenenler <a data-go="yeni">Tümü →</a></div><div class="list">${nw.slice(0,5).map(card).join('')}</div>`:''}
   <div class="sec">Son teklifi yaklaşanlar (3 gün) <a data-go="aktif">Tüm ihaleler →</a></div><div class="list">${urgent.length?urgent.map(card).join(''):'<div class="empty">3 gün içinde son teklifi olan ihale yok.</div>'}</div>
   <div class="sec">Şartnamesi henüz incelenmeyenler</div><div class="list">${top.map(card).join('')||'<div class="empty">Aktif ilanların hepsinin şartnamesi incelendi.</div>'}</div>`,'home');
-  document.querySelectorAll('[data-go]').forEach(t=>t.onclick=()=>{const f=t.dataset.go;S.view='list';S.filter=f==='yeni'?'yeni':f;S.q='';rerender(true);window.scrollTo(0,0);});}
+  document.querySelectorAll('[data-go]').forEach(t=>t.onclick=()=>{const f=t.dataset.go;S.filter=f==='yeni'?'yeni':f;const A2=allL().filter(x=>f==='yeni'?active(x)&&isNew(x.id):f==='aktif'?active(x):st(x.id)===f);S.view=GRPS.map(g=>[g,A2.filter(x=>grp(x)===g).length]).sort((a,b)=>b[1]-a[1])[0][0];S.q='';rerender(true);window.scrollTo(0,0);});}
 function renderKalem(){
   const q=S.kq.trim().toLocaleLowerCase('tr');let R=[];
   if(q.length>=2){allL().filter(active).forEach(x=>(x.kalemler||[]).forEach(k=>{if((k.ad+' '+(k.an?(k.an.tarif||'')+' '+((k.an.isaret||{}).marka||'')+' '+((k.an.isaret||{}).urun||''):'')).toLocaleLowerCase('tr').includes(q))R.push({x,k});}));R.sort((a,b)=>a.x.son.localeCompare(b.x.son));}
@@ -235,10 +238,9 @@ async function runAnaliz(id,files,fresh){const box=$('#smsg'),bar=$('#sbar');con
 
 // ---------- render: liste ----------
 function renderList(){
-  const bapV=S.view==='bap';const all=Object.entries(S.ihaleler).map(([id,d])=>({id,...d})).filter(x=>isBap(x)===bapV);
+  if(!GRPS.includes(S.view))S.view='dt';const G=S.view,bapV=G==='bap';const all=Object.entries(S.ihaleler).map(([id,d])=>({id,...d})).filter(x=>grp(x)===G);
   let L=all.filter(x=>{const s=st(x.id);const past=new Date(x.son)<Date.now();if(S.filter==='aktif')return s!=='gizli'&&!past;if(S.filter==='yeni')return s!=='gizli'&&!past&&isNew(x.id);if(S.filter==='tumu')return true;return s===S.filter;});
   if(S.our)L=L.filter(x=>x.sartOkundu);
-  if(S.usul)L=L.filter(x=>S.usul==='dt'?x.usul==='Doğrudan Temin':x.usul!=='Doğrudan Temin');
   if(S.il)L=L.filter(x=>ilOf(x)===S.il);
   if(S.q){const q=S.q.toLocaleLowerCase('tr');L=L.filter(x=>(x.kurum+' '+x.is+' '+(x.kalemler||[]).map(k=>k.ad+' '+(k.an?(k.an.tarif||'')+' '+((k.an.isaret||{}).marka||''):'')).join(' ')).toLocaleLowerCase('tr').includes(q));}
   L.sort((a,b)=>a.son.localeCompare(b.son));
@@ -246,22 +248,22 @@ function renderList(){
   const cnt=k=>all.filter(x=>k==='aktif'?active(x):k==='yeni'?active(x)&&isNew(x.id):st(x.id)===k).length;
   const chips=[['aktif','Aktif'],['yeni','Yeni'],['takip','Takipte'],['verildi','Teklif verildi'],['gizli','Gizli'],['tumu','Tümü']].map(([k,l])=>`<span class="chip ${S.filter===k?'on':''}" data-f="${k}">${l}${k!=='tumu'?' · '+cnt(k):''}</span>`).join('');
   shell(`<div class="tools"><input type="search" id="q" placeholder="Kurum, kalem veya marka ara…" value="${esc(S.q)}"><label class="sub"><input type="checkbox" id="our" ${S.our?'checked':''}> Sadece şartnamesi incelenenler</label></div>
-  <div class="filters2"><select id="fu"><option value="">Tüm usuller</option><option value="dt" ${S.usul==='dt'?'selected':''}>Doğrudan temin</option><option value="ai" ${S.usul==='ai'?'selected':''}>Açık ihale / diğer</option></select><select id="fi"><option value="">Tüm iller</option>${iller.map(i=>`<option ${S.il===i?'selected':''}>${esc(i)}</option>`).join('')}</select></div>
+  <div class="filters2"><select id="fi"><option value="">Tüm iller</option>${iller.map(i=>`<option ${S.il===i?'selected':''}>${esc(i)}</option>`).join('')}</select></div>
   <div class="chips">${chips}</div>
-  <div class="list">${L.length?L.map(card).join(''):`<div class="empty">${S.loaded?(bapV?'Bilimap BAP duyurusu yok. Sabah taraması Bilimap oturumu açıkken yeni BAP alımlarını buraya ekler.':'Bu filtrede ihale yok.'):'Yükleniyor…'}</div>`}</div>`,bapV?'bap':'list');
-  $('#fu').onchange=e=>{S.usul=e.target.value;renderList();};$('#fi').onchange=e=>{S.il=e.target.value;renderList();};
+  <div class="list">${L.length?L.map(card).join(''):`<div class="empty">${S.loaded?(bapV?'Bilimap BAP duyurusu yok. Sabah taraması Bilimap oturumu açıkken yeni BAP alımlarını buraya ekler.':G==='dt'?'Bu filtrede doğrudan temin yok.':'Bu filtrede ihale yok.'):'Yükleniyor…'}</div>`}</div>`,G);
+  $('#fi').onchange=e=>{S.il=e.target.value;renderList();};
   $('#q').oninput=e=>{S.q=e.target.value;const p=e.target.selectionStart;renderList();const q=$('#q');q.focus();q.setSelectionRange(p,p);};
   $('#our').onchange=e=>{S.our=e.target.checked;renderList();};
   document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{S.filter=c.dataset.f;renderList();});
 }
 function card(x){const d=dueInfo(x.son);const k=x.kalemler||[];const s=st(x.id);
-  return `<div class="card" data-id="${x.id}"><div class="due ${d.hot&&!d.past?'hot':''}">${d.t}<small>${d.rel}</small></div><div><div class="inst">${esc(x.kurum)}</div><div>${esc(x.is)}</div><div class="meta">${ilOf(x)?esc(ilOf(x))+' · ':''}${esc(x.dtno)} · ${k.length} kalem${x.usul!=='Doğrudan Temin'?' · '+esc(x.usul):''}</div></div><div class="badges">${x.sartOkundu?`<span class="b our">Şartname incelendi ${x.sartN}/${k.length}</span>`:''}${isNew(x.id)&&active(x)?'<span class="b new">Yeni</span>':''}${x.usul!=='Doğrudan Temin'?`<span class="b open">${esc(x.usul)}</span>`:''}${s!=='yeni'?`<span class="b st-${s}">${STL[s]}</span>`:''}</div></div>`;}
+  return `<div class="card" data-id="${x.id}"><div class="due ${d.hot&&!d.past?'hot':''}">${d.t}<small>${d.rel}</small></div><div><div class="inst">${esc(x.kurum)}</div><div>${esc(x.is)}</div><div class="meta">${ilOf(x)?esc(ilOf(x))+' · ':''}${esc(x.dtno)} · ${k.length} kalem</div></div><div class="badges">${x.sartOkundu?`<span class="b our">Şartname incelendi ${x.sartN}/${k.length}</span>`:''}${isNew(x.id)&&active(x)?'<span class="b new">Yeni</span>':''}${isBap(x)?'':isDT(x)?'<span class="b">Doğrudan temin</span>':`<span class="b open">${esc(x.usul)}</span>`}${s!=='yeni'?`<span class="b st-${s}">${STL[s]}</span>`:''}</div></div>`;}
 
 // ---------- detay ----------
 function tk(id){if(!S.teklif[id])S.teklif[id]={durum:'yeni',firma:'argunhan',teslim:'Sipariş tarihinden itibaren 15 gün',teslimYeri:'İdare deposu',odeme:'İdare mevzuatına göre',aciklama:'',gecerlilik:'30 gün',satirlar:{}};return S.teklif[id];}
 function openDetail(id){if(S.view!=='detail')S.prev=S.view;S.view='detail';S.cur=id;renderDetail();window.scrollTo(0,0);}
 function renderDetail(){
-  const id=S.cur,x=S.ihaleler[id];if(!x){S.view='list';return renderList();}
+  const id=S.cur,x=S.ihaleler[id];if(!x){S.view='dt';return renderList();}
   const t=tk(id),d=dueInfo(x.son),K=x.kalemler||[];
   const rows=K.map(k=>{const r=t.satirlar[k.n]||{};const sel=!!r.sec;return `<tr class="${sel?'sel':''}" data-n="${k.n}">
     <td data-l="Teklif ver"><input type="checkbox" data-k="sec" ${sel?'checked':''}></td><td class="num" data-l="Sıra">${k.n}</td>
@@ -288,7 +290,7 @@ function renderDetail(){
    <label>Ödeme</label><input type="text" id="odeme" value="${esc(t.odeme)}"><label>Açıklama</label><textarea id="aciklama" rows="2">${esc(t.aciklama)}</textarea>
    <div class="saved" id="saved"></div></div>
    <div class="box"><div class="tot" id="tot"></div><div class="acts"><button class="pri" id="pdfBtn">Teklif formu / PDF</button></div></div></div>`;
-  $('#back').onclick=()=>{S.view=S.prev||'list';rerender(true);};
+  $('#back').onclick=()=>{S.view=S.prev||'dt';rerender(true);};
   document.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{t.durum=b.dataset.st;save(id);renderDetail();});
   $('#fillMk').onclick=()=>{K.forEach(k=>{const i=k.an&&k.an.isaret;if(i&&i.marka&&i.guven!=='düşük'){const r=t.satirlar[k.n]||(t.satirlar[k.n]={});if(!r.marka)r.marka=[i.marka,i.urun].filter(Boolean).join(' ');}});save(id);renderDetail();};
   document.querySelectorAll('tbody tr').forEach(tr=>{const n=tr.dataset.n;tr.querySelectorAll('[data-k]').forEach(inp=>{inp.addEventListener(inp.type==='checkbox'||inp.tagName==='SELECT'?'change':'input',()=>{const r=t.satirlar[n]||(t.satirlar[n]={});const k=inp.dataset.k;r[k]=inp.type==='checkbox'?inp.checked:inp.type==='number'?(inp.value===''?null:Number(inp.value)):k==='kdv'?Number(inp.value):inp.value;if(k==='fiyat'&&r.fiyat)r.sec=true;tr.classList.toggle('sel',!!r.sec);tr.querySelector('[data-k=sec]').checked=!!r.sec;const it=K.find(q=>String(q.n)===String(n));tr.querySelector('[data-tut]').textContent=r.fiyat&&it.miktar?fmt(r.fiyat*it.miktar):'';totals();save(id);});});});
