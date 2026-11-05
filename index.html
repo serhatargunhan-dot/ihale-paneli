@@ -348,7 +348,7 @@ function preview(id){const c=calc(id);if(!c.L.length){alertBox('Önce teklif ver
 function paperCss(){let css='';for(const sh of document.styleSheets){let r;try{r=sh.cssRules;}catch(e){continue;}for(const x of r){if(x.selectorText&&/\.paper/.test(x.selectorText))css+=x.cssText+'\n';}}return css;}
 async function paperFrame(id){const f=document.createElement('iframe');f.style.cssText='position:fixed;left:0;top:0;width:820px;height:1200px;opacity:0;pointer-events:none;z-index:-1;border:0';document.body.appendChild(f);
   const d=f.contentDocument;d.open();d.write(`<!doctype html><html><head><meta charset="utf-8"><title>Teklif</title><style>${paperCss()}
-html,body{margin:0;padding:0;background:#fff}.paper{margin:0!important;box-shadow:none!important}
+html,body{margin:0;padding:0;background:#fff}.paper{margin:0!important;box-shadow:none!important;box-sizing:border-box!important;width:794px!important}
 @page{size:A4;margin:0}@media print{.paper{width:210mm!important;box-sizing:border-box}}</style></head><body>${paperHTML(id).replace('id="paper"','')}</body></html>`);d.close();
   await Promise.all([...d.images].map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r;})));await new Promise(r=>setTimeout(r,150));return f;}
 async function makePdf(id,print){const msg=$('#pmsg');const x=S.ihaleler[id];let f;
