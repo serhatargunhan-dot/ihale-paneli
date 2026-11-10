@@ -147,7 +147,7 @@ const FIRMA_VARS = {
   argunhan:{ad:"ARGUNHAN DENTAL İÇ VE DIŞ TİCARET SANAYİ LTD. ŞTİ.",kisa:"Argunhan Dental İç ve Dış Ticaret Sanayi Ltd. Şti.",adres:"Cumhuriyet Mh. Millet Cd. Efe Plaza No: 35/302 Melikgazi / KAYSERİ",vergi:"Erciyes V.D. 074 120 9455  •  Tic. Sic. No: 61908  •  Mersis No: 0074120945500001",tel:"",yetkili:"",logo:"arg",kase:true},
   kristal:{ad:"KRİSTAL DİŞ DEPOSU – AHMET ARGUNHAN",kisa:"Kristal Diş Deposu – Ahmet Argunhan",adres:"Cumhuriyet Mah. Tennuri Sok. No:13/C Melikgazi / KAYSERİ",vergi:"",tel:"serhatarg@hotmail.com",yetkili:"",logo:"kr",kase:false}
 };
-const S = {raw:{},analiz:{},dosya:{},usul:'',il:'',sort:'son',kq:'',seen:null,ihaleler:{},teklif:{},ayar:null,view:'home',cur:null,filter:'aktif',q:'',our:false,loaded:false,stale:false,db:null,canWrite:true};
+const S = {raw:{},analiz:{},dosya:{},usul:'',il:'',sort:(()=>{try{return localStorage.getItem('ip_sort')||'yeni';}catch(e){return 'yeni';}})(),kq:'',seen:null,ihaleler:{},teklif:{},ayar:null,view:'home',cur:null,filter:'aktif',q:'',our:false,loaded:false,stale:false,db:null,canWrite:true};
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt = n=>(Number(n)||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -188,7 +188,7 @@ function renderHome(){
   const in24=A.filter(x=>new Date(x.son)-now<864e5),in3=A.filter(x=>new Date(x.son)-now<3*864e5);
   const urgent=in3.filter(x=>st(x.id)!=='verildi').sort((a,b)=>a.son.localeCompare(b.son)).slice(0,8);
   const top=A.filter(x=>!x.sartVar&&!x.sartOkundu&&st(x.id)!=='verildi').sort((a,b)=>a.son.localeCompare(b.son)).slice(0,6);
-  const nw=A.filter(x=>isNew(x.id)).sort((a,b)=>a.son.localeCompare(b.son));
+  const nw=A.filter(x=>isNew(x.id)).sort((a,b)=>(b._ek||'').localeCompare(a._ek||''));
   const tile=(n,l,f,hot)=>`<div class="tile ${hot&&n?'hot':''}" data-go="${f}"><b>${n}</b><span>${l}</span></div>`;
   shell(`<div class="tiles">${tile(in24.length,'24 saat içinde son teklif','aktif',1)}${tile(nw.length,'Yeni eklenen ilan','yeni',1)}${tile(A.filter(x=>st(x.id)==='takip').length,'Takipte','takip')}${tile(A.filter(x=>st(x.id)==='verildi').length,'Teklif verildi','verildi')}</div>
   ${nw.length?`<div class="sec">Yeni eklenenler <a data-go="yeni">Tümü →</a></div><div class="list">${nw.slice(0,5).map(card).join('')}</div>`:''}
@@ -265,14 +265,15 @@ function renderList(){
   if(S.our)L=L.filter(x=>x.sartVar||x.sartOkundu);
   if(S.il)L=L.filter(x=>ilOf(x)===S.il);
   if(S.q){const q=S.q.toLocaleLowerCase('tr');L=L.filter(x=>(x.kurum+' '+x.is+' '+(x.kalemler||[]).map(k=>k.ad+' '+(k.an?(k.an.tarif||'')+' '+((k.an.isaret||{}).marka||''):'')).join(' ')).toLocaleLowerCase('tr').includes(q));}
-  L.sort((a,b)=>a.son.localeCompare(b.son));
+  L.sort(S.sort==='son'?(a,b)=>a.son.localeCompare(b.son):(a,b)=>(b._ek||'').localeCompare(a._ek||'')||b.id.localeCompare(a.id));
   const iller=[...new Set(all.filter(x=>new Date(x.son)>=Date.now()).map(ilOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));
   const cnt=k=>all.filter(x=>k==='aktif'?active(x):k==='yeni'?active(x)&&isNew(x.id):st(x.id)===k).length;
   const chips=[['aktif','Aktif'],['yeni','Yeni'],['takip','Takipte'],['verildi','Teklif verildi'],['gizli','Gizli'],['tumu','Tümü']].map(([k,l])=>`<span class="chip ${S.filter===k?'on':''}" data-f="${k}">${l}${k!=='tumu'?' · '+cnt(k):''}</span>`).join('');
   shell(`<div class="tools"><input type="search" id="q" placeholder="Kurum, kalem veya marka ara…" value="${esc(S.q)}"><label class="sub"><input type="checkbox" id="our" ${S.our?'checked':''}> Sadece şartnamesi olanlar</label></div>
-  <div class="filters2"><select id="fi"><option value="">Tüm iller</option>${iller.map(i=>`<option ${S.il===i?'selected':''}>${esc(i)}</option>`).join('')}</select></div>
+  <div class="filters2"><select id="so"><option value="yeni" ${S.sort!=='son'?'selected':''}>En yeni eklenen üstte</option><option value="son" ${S.sort==='son'?'selected':''}>Süresi yaklaşan üstte</option></select> <select id="fi"><option value="">Tüm iller</option>${iller.map(i=>`<option ${S.il===i?'selected':''}>${esc(i)}</option>`).join('')}</select></div>
   <div class="chips">${chips}</div>
   <div class="list">${L.length?L.map(card).join(''):`<div class="empty">${S.loaded?(bapV?'Bilimap BAP duyurusu yok. Sabah taraması Bilimap oturumu açıkken yeni BAP alımlarını buraya ekler.':G==='dt'?'Bu filtrede doğrudan temin yok.':'Bu filtrede ihale yok.'):'Yükleniyor…'}</div>`}</div>`,G);
+  $('#so').onchange=e=>{S.sort=e.target.value;try{localStorage.setItem('ip_sort',S.sort);}catch(_){}renderList();};
   $('#fi').onchange=e=>{S.il=e.target.value;renderList();};
   $('#q').oninput=e=>{S.q=e.target.value;const p=e.target.selectionStart;renderList();const q=$('#q');q.focus();q.setSelectionRange(p,p);};
   $('#our').onchange=e=>{S.our=e.target.checked;renderList();};
@@ -388,9 +389,9 @@ function loginView(msg){$('#app').innerHTML=`<form class="login" id="lf"><h1><im
   $('#lf').onsubmit=async e=>{e.preventDefault();const {error}=await SB.auth.signInWithPassword({email:$('#le').value.trim(),password:$('#lp').value});if(error)return loginView('E-posta veya şifre hatalı.');boot();};}
 async function loadAll(manual){
   const since=new Date(Date.now()-3*864e5).toISOString();
-  const [a,an,b,c,dz]=await Promise.all([SB.from('ihale_ilanlar').select('id,data').gte('son',since).limit(5000),SB.from('ihale_analiz').select('id,data').limit(5000),SB.from('ihale_teklifler').select('id,data').limit(5000),SB.from('ihale_ayarlar').select('key,data'),SB.from('ihale_dosyalar').select('path,ilan,ad,boyut').order('ad').limit(10000)]);
+  const [a,an,b,c,dz]=await Promise.all([SB.from('ihale_ilanlar').select('id,data,updated_at').gte('son',since).limit(5000),SB.from('ihale_analiz').select('id,data').limit(5000),SB.from('ihale_teklifler').select('id,data').limit(5000),SB.from('ihale_ayarlar').select('key,data'),SB.from('ihale_dosyalar').select('path,ilan,ad,boyut').order('ad').limit(10000)]);
   if(a.error){S.stale=true;rerender(true);return;}
-  const o={};a.data.forEach(r=>o[r.id]=r.data);S.raw=o;S.dosya={};(dz.data||[]).forEach(r=>(S.dosya[r.ilan]=S.dosya[r.ilan]||[]).push(r));S.analiz={};(an.data||[]).forEach(r=>S.analiz[r.id]=r.data);applyAnaliz();
+  const o={};a.data.forEach(r=>o[r.id]={...r.data,_ek:r.updated_at||''});S.raw=o;S.dosya={};(dz.data||[]).forEach(r=>(S.dosya[r.ilan]=S.dosya[r.ilan]||[]).push(r));S.analiz={};(an.data||[]).forEach(r=>S.analiz[r.id]=r.data);applyAnaliz();
   (b.data||[]).forEach(r=>{if(!pend[r.id]&&!busy[r.id])S.teklif[r.id]=r.data;});
   const f=(c.data||[]).find(r=>r.key==='firmalar');if(f)S.ayar=f.data;
   if(!S.seen){S.seen=Object.keys(o);markSeen();}
